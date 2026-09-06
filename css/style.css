@@ -1,0 +1,340 @@
+/**
+ * style.css
+ * ─────────────────────────────────────────────────────────
+ * All visual styles for Flower Runner.
+ * Sections:
+ *   1. CSS Custom Properties (design tokens)
+ *   2. Base / Reset
+ *   3. Stage & canvas layout
+ *   4. HUD (score, title, buttons)
+ *   5. Pause popup
+ *   6. Touch controls (D-pad + jump button)
+ *   7. Control hint
+ *   8. Screen overlays (loading, menu, help, win)
+ *   9. Win overlay extras (stars, record)
+ *   10. Rotate-to-landscape overlay
+ *   11. Responsive: safe-area insets & small-screen tweaks
+ */
+
+/* ── 1. Design tokens ──────────────────────────────────── */
+:root {
+  --sky-top:    #8fd3f4;
+  --sky-bottom: #fbe8a6;
+  --hill-far:   #7bc47f;
+  --hill-near:  #4fa668;
+  --ground:     #a8763e;
+  --ground-dark:#8a5f30;
+  --ink:        #2b2016;
+  --cream:      #fff6e6;
+  --coral:      #ff6f59;
+  --sun:        #ffd66b;
+}
+
+/* ── 2. Base / Reset ────────────────────────────────────── */
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0; padding: 0;
+  width: 100%; height: 100%;
+  overflow: hidden;
+  background: var(--ground-dark);
+  font-family: 'Trebuchet MS', 'Segoe UI', system-ui, sans-serif;
+  touch-action: none;
+  -webkit-user-select: none; user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* ── 3. Stage & canvas ──────────────────────────────────── */
+#stage {
+  position: fixed; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: linear-gradient(#1a1a1a, #000);
+}
+#gameWrap {
+  position: relative;
+  width: 100%; height: 100%;
+  max-width: 100vw; max-height: 100vh;
+}
+canvas {
+  display: block;
+  width: 100%; height: 100%;
+  background: linear-gradient(var(--sky-top), var(--sky-bottom));
+}
+
+/* ── 4. HUD ─────────────────────────────────────────────── */
+#hud {
+  position: absolute; top: 0; left: 0; right: 0;
+  display: flex; justify-content: space-between; align-items: flex-start;
+  padding: 14px 16px;
+  pointer-events: none; /* clicks pass through to canvas */
+  font-weight: 700;
+  color: var(--ink);
+}
+
+/* Score pill — bounces on collection via JS-toggled class */
+#score {
+  background: var(--cream);
+  border: 3px solid var(--ink);
+  border-radius: 14px;
+  padding: 6px 14px;
+  display: flex; align-items: center; gap: 8px;
+  font-size: clamp(14px, 3.2vw, 20px);
+  box-shadow: 0 4px 0 rgba(0,0,0,0.25);
+  /* CSS animation triggered by adding/removing the .bounce class */
+  transition: transform 0.12s cubic-bezier(.36, 2, .6, 1);
+}
+#score.bounce  { transform: scale(1.22); }
+#score .flowerIcon { font-size: 1.2em; }
+
+/* Game title badge */
+#title {
+  background: var(--coral);
+  color: var(--cream);
+  border: 3px solid var(--ink);
+  border-radius: 14px;
+  padding: 6px 14px;
+  font-size: clamp(12px, 2.6vw, 16px);
+  box-shadow: 0 4px 0 rgba(0,0,0,0.25);
+}
+
+/* Right cluster: mute + menu buttons */
+#hudRight { display: flex; gap: 8px; align-items: flex-start; }
+
+/* Shared style for icon buttons */
+#muteBtn, #menuBtn {
+  background: rgba(255,246,230,0.92);
+  border: 3px solid var(--ink);
+  border-radius: 12px;
+  padding: 5px 11px;
+  font-size: clamp(16px, 3.5vw, 20px);
+  font-weight: 800;
+  color: var(--ink);
+  cursor: pointer;
+  pointer-events: auto;
+  box-shadow: 0 4px 0 rgba(0,0,0,0.25);
+  line-height: 1;
+  transition: transform .05s, box-shadow .05s;
+  user-select: none; -webkit-user-select: none;
+}
+#muteBtn:active, #menuBtn:active {
+  transform: translateY(3px);
+  box-shadow: 0 1px 0 rgba(0,0,0,0.25);
+}
+
+/* ── 5. Pause popup ─────────────────────────────────────── */
+#pausePopup {
+  display: none; /* toggled to flex by JS */
+  position: absolute; inset: 0;
+  background: rgba(20,15,10,0.72);
+  align-items: center; justify-content: center; flex-direction: column;
+  z-index: 25;
+  gap: 16px;
+}
+#pausePopup h2 {
+  font-size: clamp(20px, 5vw, 32px);
+  color: var(--cream);
+  margin: 0 0 6px;
+  text-align: center;
+}
+.pauseBtn {
+  pointer-events: auto;
+  font-family: inherit;
+  font-weight: 700;
+  font-size: clamp(14px, 3.5vw, 18px);
+  padding: 12px 32px;
+  border-radius: 12px;
+  border: 3px solid var(--cream);
+  cursor: pointer;
+  min-width: 180px;
+  transition: transform .06s, box-shadow .06s;
+  box-shadow: 0 5px 0 rgba(0,0,0,0.35);
+}
+.pauseBtn:active { transform: translateY(4px); box-shadow: 0 1px 0 rgba(0,0,0,0.35); }
+#resumeBtn { background: var(--coral); color: var(--cream); }
+#exitBtn   { background: #3a5a8a;     color: var(--cream); }
+
+/* ── 6. Touch controls ──────────────────────────────────── */
+#controls {
+  position: absolute; left: 0; right: 0; bottom: 0;
+  display: flex; justify-content: space-between; align-items: flex-end;
+  padding: 18px;
+  pointer-events: none;
+}
+#dpad { display: flex; gap: 14px; pointer-events: auto; }
+
+/* Directional arrow buttons */
+.ctrlBtn {
+  width: 64px; height: 64px;
+  border-radius: 50%;
+  border: 3px solid var(--ink);
+  background: rgba(255,246,230,0.85);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 26px;
+  color: var(--ink);
+  box-shadow: 0 5px 0 rgba(0,0,0,0.3);
+  transition: transform .05s, box-shadow .05s;
+}
+.ctrlBtn.active {
+  transform: translateY(4px);
+  box-shadow: 0 1px 0 rgba(0,0,0,0.3);
+  background: var(--sun);
+}
+
+/* Jump button — larger and more prominent */
+#jumpBtn {
+  width: 82px; height: 82px;
+  font-size: 15px; font-weight: 800;
+  pointer-events: auto;
+  border-radius: 50%;
+  border: 3px solid var(--ink);
+  background: var(--coral);
+  display: flex; align-items: center; justify-content: center;
+  color: var(--cream);
+  box-shadow: 0 6px 0 rgba(0,0,0,0.3);
+  transition: transform .05s, box-shadow .05s;
+}
+#jumpBtn.active {
+  transform: translateY(5px);
+  box-shadow: 0 1px 0 rgba(0,0,0,0.3);
+}
+
+/* ── 7. Control hint ────────────────────────────────────── */
+#hint {
+  position: absolute;
+  top: 64px; left: 50%; transform: translateX(-50%);
+  color: var(--ink);
+  background: rgba(255,246,230,0.9);
+  border: 2px solid var(--ink);
+  border-radius: 10px;
+  padding: 4px 12px;
+  font-size: clamp(11px, 2.4vw, 14px);
+  font-weight: 600;
+  pointer-events: none;
+  transition: opacity .6s;
+  white-space: nowrap;
+}
+
+/* ── 8. Screen overlays ─────────────────────────────────── */
+/* Base class for all full-screen overlay panels */
+.screen {
+  position: absolute; inset: 0;
+  background: rgba(20,15,10,0.72);
+  display: none; /* toggled to flex by JS */
+  align-items: center; justify-content: center; flex-direction: column;
+  color: var(--cream);
+  text-align: center;
+  padding: 24px;
+  z-index: 20;
+}
+.screen h1 { font-size: clamp(24px, 6vw, 40px); margin: 0 0 8px; }
+.screen p  { font-size: clamp(14px, 3.5vw, 18px); margin: 0 0 18px; opacity: 0.9; }
+
+/* Primary action buttons used inside screens */
+.screenBtn {
+  pointer-events: auto;
+  font-family: inherit;
+  font-weight: 700;
+  font-size: clamp(14px, 3.5vw, 18px);
+  padding: 10px 22px;
+  border-radius: 12px;
+  border: 3px solid var(--cream);
+  background: var(--coral);
+  color: var(--cream);
+  cursor: pointer;
+  box-shadow: 0 4px 0 rgba(0,0,0,0.3);
+  transition: transform .06s, box-shadow .06s;
+}
+.screenBtn:active { transform: translateY(3px); box-shadow: 0 1px 0 rgba(0,0,0,0.3); }
+
+/* Loading spinner */
+.spinner {
+  width: 34px; height: 34px;
+  border-radius: 50%;
+  border: 4px solid rgba(255,246,230,0.35);
+  border-top-color: var(--cream);
+  animation: spin 0.9s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── 9. Win overlay extras ──────────────────────────────── */
+#starDisplay {
+  font-size: clamp(28px, 7vw, 44px);
+  margin: 0 0 6px;
+  letter-spacing: 4px;
+}
+#bestScoreDisplay {
+  font-size: clamp(12px, 2.8vw, 15px);
+  opacity: 0.75;
+  margin: 0 0 18px;
+}
+#newRecord {
+  color: #ffd66b;
+  font-weight: 800;
+  font-size: clamp(14px, 3.2vw, 18px);
+  margin: -10px 0 12px;
+}
+
+/* ── 10. Rotate-to-landscape overlay ────────────────────── */
+#rotateOverlay {
+  display: none;
+  position: fixed; inset: 0; z-index: 999;
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+  align-items: center; justify-content: center; flex-direction: column;
+  color: var(--cream);
+  text-align: center;
+  padding: 24px;
+}
+#rotateOverlay .rotateIcon {
+  font-size: clamp(60px, 18vw, 90px);
+  animation: rotatePhone 2s ease-in-out infinite;
+  display: block;
+  margin-bottom: 16px;
+}
+#rotateOverlay p {
+  font-size: clamp(14px, 4vw, 20px);
+  font-weight: 700;
+  margin: 0; opacity: 0.9;
+}
+@keyframes rotatePhone {
+  0%   { transform: rotate(0deg);   }
+  30%  { transform: rotate(-90deg); }
+  70%  { transform: rotate(-90deg); }
+  100% { transform: rotate(0deg);   }
+}
+
+/* ── 11. Responsive overrides ───────────────────────────── */
+
+/* Portrait mode: hide game, show rotation prompt */
+@media (orientation: portrait) {
+  #rotateOverlay { display: flex; }
+  #stage         { display: none; }
+}
+@media (orientation: landscape) {
+  #rotateOverlay { display: none; }
+  #stage         { display: flex; }
+}
+
+/* Respect device safe-area insets (notched phones in landscape) */
+#hud {
+  padding-top:   max(14px, env(safe-area-inset-top));
+  padding-left:  max(16px, env(safe-area-inset-left));
+  padding-right: max(16px, env(safe-area-inset-right));
+}
+#controls {
+  padding-bottom: max(18px, env(safe-area-inset-bottom));
+  padding-left:   max(18px, env(safe-area-inset-left));
+  padding-right:  max(18px, env(safe-area-inset-right));
+}
+
+/* Shrink touch buttons on very short landscape screens (e.g. iPhone SE landscape) */
+@media (orientation: landscape) and (max-height: 420px) {
+  .ctrlBtn { width: 50px; height: 50px; font-size: 20px; }
+  #jumpBtn  { width: 64px; height: 64px; font-size: 12px; }
+  #controls { padding: 10px; padding-bottom: max(10px, env(safe-area-inset-bottom)); }
+  #hud      { padding: 8px max(10px, env(safe-area-inset-right)) 0 max(10px, env(safe-area-inset-left)); }
+  #score    { font-size: clamp(11px, 2.6vh, 16px); padding: 4px 10px; }
+  #title    { font-size: clamp(10px, 2.2vh, 14px); padding: 4px 10px; }
+  .screen h1  { font-size: clamp(18px, 5vh, 28px); }
+  .screen p   { font-size: clamp(12px, 3vh, 15px); }
+  .screenBtn  { font-size: clamp(12px, 3vh, 15px); padding: 8px 16px; }
+}
