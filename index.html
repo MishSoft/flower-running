@@ -74,6 +74,59 @@
     font-size:clamp(12px,2.6vw,16px);
     box-shadow:0 4px 0 rgba(0,0,0,0.25);
   }
+  #menuBtn{
+    background:rgba(255,246,230,0.92);
+    border:3px solid var(--ink);
+    border-radius:12px;
+    padding:5px 11px;
+    font-size:clamp(16px,3.5vw,20px);
+    font-weight:800;
+    color:var(--ink);
+    cursor:pointer;
+    pointer-events:auto;
+    box-shadow:0 4px 0 rgba(0,0,0,0.25);
+    line-height:1;
+    transition:transform .05s, box-shadow .05s;
+    user-select:none;
+    -webkit-user-select:none;
+  }
+  #menuBtn:active{
+    transform:translateY(3px);
+    box-shadow:0 1px 0 rgba(0,0,0,0.25);
+  }
+
+  /* Pause popup */
+  #pausePopup{
+    display:none;
+    position:absolute;inset:0;
+    background:rgba(20,15,10,0.72);
+    align-items:center;justify-content:center;
+    flex-direction:column;
+    z-index:25;
+    gap:16px;
+  }
+  #pausePopup h2{
+    font-size:clamp(20px,5vw,32px);
+    color:var(--cream);
+    margin:0 0 6px;
+    text-align:center;
+  }
+  .pauseBtn{
+    pointer-events:auto;
+    font-family:inherit;
+    font-weight:700;
+    font-size:clamp(14px,3.5vw,18px);
+    padding:12px 32px;
+    border-radius:12px;
+    border:3px solid var(--cream);
+    cursor:pointer;
+    min-width:180px;
+    transition:transform .06s, box-shadow .06s;
+    box-shadow:0 5px 0 rgba(0,0,0,0.35);
+  }
+  .pauseBtn:active{ transform:translateY(4px); box-shadow:0 1px 0 rgba(0,0,0,0.35); }
+  #resumeBtn{ background:var(--coral); color:var(--cream); }
+  #exitBtn  { background:#3a5a8a;     color:var(--cream); }
 
   /* Touch controls */
   #controls{
@@ -253,6 +306,13 @@
     <div id="hud">
       <div id="score"><span class="flowerIcon">🌸</span><span id="scoreText">0 / 0</span></div>
       <div id="title">ყვავილების მონადირე</div>
+      <div id="menuBtn" title="მენიუ">☰</div>
+    </div>
+
+    <div id="pausePopup">
+      <h2>⏸ პაუზა</h2>
+      <button id="resumeBtn" class="pauseBtn">▶ გაგრძელება</button>
+      <button id="exitBtn"   class="pauseBtn">✕ გამოსვლა</button>
     </div>
 
     <div id="hint">← → სირბილისთვის, SPACE ხტომისთვის</div>
@@ -309,9 +369,60 @@
   const loadingScreen = document.getElementById('loadingScreen');
   const menuScreen = document.getElementById('menuScreen');
   const startBtn = document.getElementById('startBtn');
+  const menuBtn    = document.getElementById('menuBtn');
+  const pausePopup = document.getElementById('pausePopup');
+  const resumeBtn  = document.getElementById('resumeBtn');
+  const exitBtn    = document.getElementById('exitBtn');
+
+  // ---------- Fullscreen helpers ----------
+  function enterFullscreen(){
+    const el = document.documentElement;
+    const fn = el.requestFullscreen || el.webkitRequestFullscreen || el.mozRequestFullScreen || el.msRequestFullscreen;
+    if(fn) fn.call(el).catch(()=>{});
+  }
+  function exitFullscreen(){
+    const fn = document.exitFullscreen || document.webkitExitFullscreen || document.mozCancelFullScreen || document.msExitFullscreen;
+    if(fn) fn.call(document).catch(()=>{});
+  }
+
+  // ---------- Pause menu ----------
+  let paused = false;
+  function openPauseMenu(){
+    paused = true;
+    running = false;
+    keys.left = false; keys.right = false; keys.jump = false;
+    pausePopup.style.display = 'flex';
+  }
+  function closePauseMenu(){
+    paused = false;
+    pausePopup.style.display = 'none';
+  }
+
+  menuBtn.addEventListener('click', ()=>{ openPauseMenu(); });
+  menuBtn.addEventListener('touchstart', e=>{ e.preventDefault(); openPauseMenu(); }, {passive:false});
+
+  resumeBtn.addEventListener('click', ()=>{
+    closePauseMenu();
+    running = true;
+  });
+
+  exitBtn.addEventListener('click', ()=>{
+    closePauseMenu();
+    exitFullscreen();
+    // game stays paused (running remains false)
+  });
 
   let DPR = Math.min(window.devicePixelRatio || 1, 2);
   let VW = 0, VH = 0; // CSS pixel size of canvas
+
+  // Dynamic scale: on very short screens (phones in landscape) we zoom the world
+  // out so that tall platforms and jumps don't push the character off-screen.
+  // Reference height: 460px — anything shorter gets scaled down proportionally.
+  // Capped between 0.55 (very small phone) and 1.0 (normal).
+  let WORLD_SCALE = 1;
+  function updateWorldScale(){
+    WORLD_SCALE = Math.max(0.55, Math.min(1.0, VH / 460));
+  }
 
   function resize(){
     DPR = Math.min(window.devicePixelRatio || 1, 2);
@@ -323,6 +434,7 @@
     canvas.style.width = VW + 'px';
     canvas.style.height = VH + 'px';
     ctx.setTransform(DPR,0,0,DPR,0,0);
+    updateWorldScale();
   }
   window.addEventListener('resize', resize);
   window.addEventListener('orientationchange', ()=>setTimeout(resize,150));
@@ -338,6 +450,7 @@
   const CLIMB_DURATION = 1.1; // seconds to climb back up the rope
 
   const groundHeight = 90;
+
 
   // Level definition (world units in px, independent of screen size)
   // platforms: {x,y,w,h} where y is height ABOVE ground baseline
@@ -485,6 +598,7 @@
   resetGame(false);
 
   startBtn.addEventListener('click', ()=>{
+    enterFullscreen();
     menuScreen.style.display = 'none';
     helpScreen.style.display = 'flex';
   });
@@ -655,8 +769,9 @@
       }
     }
 
-    // camera follow
-    const targetCamX = Math.max(0, Math.min(player.x - VW*0.4, LEVEL_WIDTH - VW));
+    // camera follow (account for WORLD_SCALE when computing how much world fits on screen)
+    const scaledVW = VW / WORLD_SCALE;
+    const targetCamX = Math.max(0, Math.min(player.x - scaledVW*0.4, LEVEL_WIDTH - scaledVW));
     camera.x += (targetCamX - camera.x) * Math.min(1, dt*6);
   }
 
@@ -671,8 +786,11 @@
 
   // ---------- Drawing ----------
   function worldToScreenY(heightAboveBaseline){
-    // baseline sits near bottom of screen
-    const baselineScreenY = VH - 60;
+    // baseline sits near bottom of screen.
+    // The canvas ctx is scaled by WORLD_SCALE before this is called (inside
+    // the save/restore block), so we work in world units and let the transform
+    // do the zooming. This function is ONLY called inside that scaled context.
+    const baselineScreenY = VH / WORLD_SCALE - 60;
     return baselineScreenY - heightAboveBaseline;
   }
 
@@ -697,7 +815,12 @@
     drawHills(camera.x*0.5, VH-110, '#5fb570', 0.8);
 
     ctx.save();
-    ctx.translate(-camera.x, 0);
+    // Zoom the whole world uniformly. We scale around the bottom of the screen
+    // (the baseline) so the ground stays anchored and everything above it shrinks
+    // upwards — keeping the character and platforms on-screen on short phones.
+    ctx.translate(0, VH);
+    ctx.scale(WORLD_SCALE, WORLD_SCALE);
+    ctx.translate(-camera.x, -VH / WORLD_SCALE);
 
     // ground platforms
     for(const p of platforms){
